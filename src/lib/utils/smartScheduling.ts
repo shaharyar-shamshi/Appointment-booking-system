@@ -96,19 +96,22 @@ export function smartScheduling(
       score += 1;
     }
 
-    // const perfectFit = isPerfectFitSlot(
-    //   new Date(slot.startTime),
-    //   new Date(slot.endTime),
-    //   service,
-    //   precedingAppointment,
-    //   succeedingAppointment,
-    //   dayStart,
-    //   dayEnd
-    // );
+    const lowestDurationService = lowestDuration(services);
 
-    // if (perfectFit) {
-    //   score += 5;
-    // }
+    const perfectFit = isPerfectFitSlot(
+      new Date(slot.startTime),
+      new Date(slot.endTime),
+      service,
+      precedingAppointment,
+      succeedingAppointment,
+      dayStart,
+      dayEnd,
+      lowestDurationService
+    );
+
+    if (perfectFit) {
+      score += 5;
+    }
 
     return { ...slot, score };
   });
@@ -195,29 +198,42 @@ function isPerfectFitSlot(
   precedingAppointment: AppointmentItem | null,
   succeedingAppointment: AppointmentItem | null,
   dayStart: Date,
-  dayEnd: Date
+  dayEnd: Date,
+  lowestDurationService: number
 ): boolean {
   const serviceDuration = service.durationInMinutes;
 
-  // Determine the end of the last appointment or start of the working day
+  // End of last appointment or start of day
   const beforeEnd = precedingAppointment
     ? new Date(precedingAppointment.endTime)
     : dayStart;
 
-  // Determine the start of the next appointment or end of the working day
+  // Start of next appointment or end of day
   const afterStart = succeedingAppointment
     ? new Date(succeedingAppointment.startTime)
     : dayEnd;
 
-  // Calculate the gap (in minutes) before and after the slot
-  const gapBefore = (slotStart.getTime() - beforeEnd.getTime()) / 60000;
-  const gapAfter = (afterStart.getTime() - slotEnd.getTime()) / 60000;
+  // Calculate available gap in minutes
+  const availableGap = (afterStart.getTime() - beforeEnd.getTime()) / 60000;
 
-  // Check that both gaps are multiples of the service duration and non-negative
-  return (
-    gapBefore >= 0 &&
-    gapAfter >= 0 &&
-    gapBefore % serviceDuration === 0 &&
-    gapAfter % serviceDuration === 0
-  );
+  // Perfect fit: gap exactly matches service duration
+  if (serviceDuration === availableGap) {
+    return true;
+  }
+
+  // Almost perfect: leftover gap is less than the smallest service
+  if (
+    availableGap - serviceDuration < lowestDurationService &&
+    availableGap - serviceDuration >= 0
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function lowestDuration(services: ServiceItem[]): number {
+  return services.reduce((min, service) => {
+    return service.durationInMinutes < min ? service.durationInMinutes : min;
+  }, services[0].durationInMinutes);
 }
